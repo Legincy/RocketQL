@@ -1,5 +1,5 @@
 [package]
-name = "RocketQL"
+name = "rocket_ql"
 version = "0.1.0"
 edition = "2021"
 
