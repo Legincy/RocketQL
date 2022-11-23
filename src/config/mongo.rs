@@ -1,9 +1,10 @@
 use dotenv::dotenv;
 use std::{env, io::Error};
 use mongodb::{
-    bson::{doc, oid::ObjectId},
-    sync::{Client, Collection, Database}};
-use crate::schema::project_schema::{Owner, Project};
+    bson::{doc, oid::ObjectId, Document},
+    sync::{Client, Collection, Database, Cursor},
+    results::{InsertOneResult}};
+use crate::schema::project_schema::{CreateEmployee, DeleteEmployee, Employee, UpdateEmployee, Status, Store, CreateStore, Location, Rank, CreateLocation, CreateRank};
 
 pub struct MongoDB {
     db: Database,
@@ -18,7 +19,7 @@ impl MongoDB {
         };
 
         let client = Client::with_uri_str(uri).unwrap();
-        let db = client.database("projectMngt");
+        let db = client.database("praktikum");
         MongoDB { db }
     }
 
@@ -26,79 +27,265 @@ impl MongoDB {
         data_source.db.collection(collection_name)
     }
 
-    pub fn create_owner(&self, new_owner: Owner) -> Result<Owner, Error> {
-        let new_doc = Owner{
-            _id: None,
-            name: new_owner.name.clone(),
-            email: new_owner.email.clone(),
-            phone: new_owner.phone.clone(),
-        };
-        let col = MongoDB::column_helper::<Owner>(&self, "owner");
-        let data = col.insert_one(new_doc, None).ok().expect("Error while creating new owner.");
-        let new_owner = Owner {
-            _id: data.inserted_id.as_object_id(),
-            name: new_owner.name.clone(),
-            email: new_owner.email.clone(),
-            phone: new_owner.phone.clone(),
-        };
-        Ok(new_owner)
+    /*
+     * Employee Repository
+     */
+    pub fn delete_employee(&self, delete_entry: DeleteEmployee) -> Result<Employee, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(&delete_entry.id).unwrap();
+        let col: Collection<Employee> =  MongoDB::column_helper::<Employee>(&self, "employee");
+        let filter: Document  = doc! {"_id": obj_id};
+
+        let _data = col.delete_one(filter, None)
+            .ok()
+            .expect(&*format!("Error while deleting requested Employee with ID '{}'", obj_id));
+
+        Ok(Employee{id: None, first_name: String::from(""), last_name: String::from(""), status: None, stores: None, rank_id: None })
     }
 
-    pub fn get_owners(&self) -> Result<Vec<Owner>, Error> {
-        let col = MongoDB::column_helper(&self, "owner");
-        let cursor = col.find(None, None).ok().expect("Error while fetching list of owners.");
-        let owner_vec: Vec<Owner> = cursor.map(|doc| doc.unwrap()).collect();
-        Ok(owner_vec)
+    pub fn update_employee(&self, update_entry: UpdateEmployee) -> Result<Employee, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(&update_entry.id).unwrap();
+        let fetch_filter: Document  = doc! {"_id": obj_id};
+
+        let col: Collection<Employee> =  MongoDB::column_helper::<Employee>(&self, "employee");
+        let employee_result: Employee = col
+            .find_one(fetch_filter, None)
+            .ok()
+            .expect(&*format!("Error while fetching requested Employee with ID '{}'", obj_id))
+            .unwrap();
+
+        let first_name: String = if update_entry.first_name == None {employee_result.first_name} else { update_entry.first_name.clone().unwrap() };
+        let last_name: String= if update_entry.last_name == None {employee_result.last_name} else { update_entry.last_name.clone().unwrap() };
+        let status: Status = if update_entry.status == None {Status::None} else { update_entry.status.clone().unwrap() };
+        let validated_rank: String = self.validate_rank(&update_entry.rank_id);
+        let validated_stores: Vec<String> = self.validate_store_vec(&update_entry.stores.unwrap());
+
+        let update_filter: Document  = doc! {"_id": obj_id};
+        let update: Document  = doc! {"$set": {"first_name": String::from(&first_name), "last_name": String::from(&last_name), "stores": &validated_stores, "rank": &validated_rank}};
+
+        col.update_one(update_filter, update,None).ok().expect(&*format!("Error while updating requested Employee with ID '{}", obj_id));
+
+        let updated_employee = self.get_single_employee(&update_entry.id);
+
+        Ok(updated_employee.unwrap())
     }
 
-    pub fn get_single_owner(&self, id: &String) -> Result<Owner, Error> {
-        let obj_id = ObjectId::parse_str(id).unwrap();
-        let filter  = doc! {"_id": obj_id};
-        let col =  MongoDB::column_helper::<Owner>(&self, "owner");
-        let owner_result  = col
+    pub fn create_employee(&self, new_entry: CreateEmployee) -> Result<Employee, Error> {
+        let col: Collection<Employee> = MongoDB::column_helper::<Employee>(&self, "employee");
+        let validated_stores: Vec<String> = self.validate_store_vec(&new_entry.stores.unwrap());
+
+        let mut new_doc = Employee{
+            id: None,
+            first_name: new_entry.first_name.clone(),
+            last_name: new_entry.last_name.clone(),
+            status: Option::from(if new_entry.status == None { Status::None } else { new_entry.status.unwrap() }),
+            stores: Option::from(validated_stores),
+            rank_id: None,
+        };
+
+        let data: InsertOneResult = col.insert_one(&new_doc, None)
+            .ok()
+            .expect("Error while creating new employee.");
+        new_doc.id =  data.inserted_id.as_object_id();
+
+        Ok(new_doc)
+    }
+
+    pub fn get_all_employees(&self) -> Result<Vec<Employee>, Error> {
+        let col: Collection<Employee> = MongoDB::column_helper(&self, "employee");
+        let cursor: Cursor<Employee>= col.find(None, None)
+            .ok()
+            .expect("Error while fetching list of employees.");
+
+        let employee_vec: Vec<Employee> = cursor
+            .map(|doc| doc.unwrap())
+            .collect();
+
+        Ok(employee_vec)
+    }
+
+    pub fn get_single_employee(&self, id: &String) -> Result<Employee, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(id).unwrap();
+        let filter: Document  = doc! {"_id": obj_id};
+        let col: Collection<Employee> =  MongoDB::column_helper::<Employee>(&self, "employee");
+
+        let opt_employee: Option<Employee> = col
             .find_one(filter, None)
             .ok()
-            .expect("Error while fetching requested Owner with ID '{obj_id}");
-        Ok(owner_result.unwrap())
+            .expect(&*format!("Error while fetching requested employee with ID '{}'", obj_id));
+
+        Ok(opt_employee.unwrap())
     }
 
-    pub fn create_project(&self, new_project: Project) -> Result<Project, Error> {
-        let new_doc = Project {
-            _id: None,
-            owner_id: new_project.owner_id.clone(),
-            name: new_project.name.clone(),
-            description: new_project.description.clone(),
-            status: new_project.status.clone(),
-        };
-        let col = MongoDB::column_helper(&self, "project");
-        let data = col.insert_one(new_doc, None).ok().expect("Error while creating new project.");
-        let new_project = Project {
-            _id: data.inserted_id.as_object_id(),
-            owner_id: new_project.owner_id.clone(),
-            name: new_project.name.clone(),
-            description: new_project.description.clone(),
-            status: new_project.status.clone(),
+    /*
+     * Store Repository
+     */
+    pub fn create_store(&self, new_entry: CreateStore) -> Result<Store, Error> {
+        let col: Collection<Store> = MongoDB::column_helper::<Store>(&self, "store");
+        let mut new_doc = Store{
+            id: None,
+            name: new_entry.name.clone(),
+            location_id: self.validate_location(&new_entry.location_id)
         };
 
-        Ok(new_project)
+        let data: InsertOneResult = col.insert_one(&new_doc, None)
+            .ok()
+            .expect("Error while creating new store.");
+        new_doc.id =  data.inserted_id.as_object_id();
+
+        Ok(new_doc)
     }
 
-    pub fn get_projects(&self) -> Result<Vec<Project>, Error> {
-        let col = MongoDB::column_helper(&self, "project");
-        let cursor = col.find(None, None).ok().expect("Error while fetching list of projects");
-        let project_vec: Vec<Project> = cursor.map(|doc| doc.unwrap()).collect();
-        Ok(project_vec)
+    pub fn get_all_stores(&self) -> Result<Vec<Store>, Error> {
+        let col: Collection<Store> = MongoDB::column_helper(&self, "store");
+        let cursor: Cursor<Store>= col.find(None, None)
+            .ok()
+            .expect("Error while fetching list of stores.");
+
+        let store_vec: Vec<Store> = cursor
+            .map(|doc| {
+                doc.unwrap()
+            })
+            .collect();
+
+        Ok(store_vec)
     }
 
-    pub fn get_single_project(&self, id: &String) -> Result<Project, Error> {
-        let obj_id = ObjectId::parse_str(id).unwrap();
-        let filter = doc! {"_id": obj_id};
-        let col = MongoDB::column_helper(&self, "project");
-        let project_result = col
+    pub fn get_single_store(&self, id: &String) -> Result<Option<Store>, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(id).expect("Ungültige ID");
+        let filter: Document  = doc! {"_id": obj_id};
+        let col: Collection<Store> =  MongoDB::column_helper::<Store>(&self, "store");
+
+        let opt_store: Option<Store> = col
             .find_one(filter, None)
             .ok()
-            .expect("Error while fetching requested Project with ID '{object_id}'");
-        Ok(project_result.unwrap())
+            .expect(&*format!("Error while fetching requested store with ID '{}'", obj_id));
+
+        Ok(opt_store)
     }
 
+    pub fn validate_store_vec(&self, store_vec: &Vec<String>) -> Vec<String> {
+        let mut valid_store_vec: Vec<String> = Vec::new();
+
+        for store_id in store_vec.clone().iter(){
+            let fetched_store: Option<Store> = self.get_single_store(&store_id).unwrap();
+
+            if fetched_store.is_some() {
+                valid_store_vec.push(String::from(store_id));
+            }
+        }
+
+        valid_store_vec
+    }
+
+    /*
+     * Location Repository
+     */
+    pub fn create_location(&self, new_entry: CreateLocation) -> Result<Location, Error> {
+        let col: Collection<Location> = MongoDB::column_helper::<Location>(&self, "location");
+        let mut new_doc = Location{
+            id: None,
+            country: new_entry.country.clone(),
+            state: new_entry.state.clone()
+        };
+
+        let data: InsertOneResult = col.insert_one(&new_doc, None)
+            .ok()
+            .expect("Error while creating new location.");
+        new_doc.id =  data.inserted_id.as_object_id();
+
+        Ok(new_doc)
+    }
+
+    pub fn get_all_locations(&self) -> Result<Vec<Location>, Error> {
+        let col: Collection<Location> = MongoDB::column_helper(&self, "location");
+        let cursor: Cursor<Location>= col.find(None, None)
+            .ok()
+            .expect("Error while fetching list of stores.");
+
+        let location_vec: Vec<Location> = cursor
+            .map(|doc| {
+                doc.unwrap()
+            })
+            .collect();
+
+        Ok(location_vec)
+    }
+
+    pub fn get_single_location(&self, id: &String) -> Result<Option<Location>, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(id).expect("Ungültige ID");
+        let filter: Document  = doc! {"_id": obj_id};
+        let col: Collection<Location> =  MongoDB::column_helper::<Location>(&self, "location");
+
+        let opt_location: Option<Location> = col
+            .find_one(filter, None)
+            .ok()
+            .expect(&*format!("Error while fetching requested location with ID '{}'", obj_id));
+
+        Ok(opt_location)
+    }
+
+    pub fn validate_location(&self, location_id: &String) -> String {
+        let mut valid_location_id: String = location_id.clone();
+
+        let fetched_location: Option<Location> = self.get_single_location(location_id).unwrap();
+        if fetched_location.is_none() { valid_location_id = String::from("")}
+
+        valid_location_id
+    }
+
+    /*
+     * Rank Repository
+     */
+    pub fn create_rank(&self, new_entry: CreateRank) -> Result<Rank, Error> {
+        let col: Collection<Rank> = MongoDB::column_helper::<Rank>(&self, "rank");
+        let mut new_doc = Rank{
+            id: None,
+            name: new_entry.name.clone(),
+            description: new_entry.description.clone()
+        };
+
+        let data: InsertOneResult = col.insert_one(&new_doc, None)
+            .ok()
+            .expect("Error while creating new rank.");
+        new_doc.id =  data.inserted_id.as_object_id();
+
+        Ok(new_doc)
+    }
+
+    pub fn get_all_ranks(&self) -> Result<Vec<Rank>, Error> {
+        let col: Collection<Rank> = MongoDB::column_helper(&self, "rank");
+        let cursor: Cursor<Rank>= col.find(None, None)
+            .ok()
+            .expect("Error while fetching list of ranks.");
+
+        let rank_vec: Vec<Rank> = cursor
+            .map(|doc| {
+                doc.unwrap()
+            })
+            .collect();
+
+        Ok(rank_vec)
+    }
+
+    pub fn get_single_rank(&self, id: &String) -> Result<Option<Rank>, Error> {
+        let obj_id: ObjectId = ObjectId::parse_str(id).expect("Ungültige ID");
+        let filter: Document  = doc! {"_id": obj_id};
+        let col: Collection<Rank> =  MongoDB::column_helper::<Rank>(&self, "rank");
+
+        let opt_rank: Option<Rank> = col
+            .find_one(filter, None)
+            .ok()
+            .expect(&*format!("Error while fetching requested rank with ID '{}'", obj_id));
+
+        Ok(opt_rank)
+    }
+
+    pub fn validate_rank(&self, rank_id: &String) -> String {
+        let mut valid_rank_id: String = rank_id.clone();
+
+        let fetched_rank: Option<Rank> = self.get_single_rank(rank_id).unwrap();
+        if fetched_rank.is_none() { valid_rank_id = String::from("")}
+
+        valid_rank_id
+    }
 }

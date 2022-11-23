@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 rocket = {version = "0.5.0-rc.2", features = ["json"]}
-async-graphql = {version = "4.0.16", features = ["bson", "chrono"]}
+async-graphql = {version = "4.0.16", features = ["bson"]}
 async-graphql-rocket = "4.0.16"
 serde = "1.0.147"
 dotenv = "0.15.0"

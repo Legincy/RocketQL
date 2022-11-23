@@ -1,6 +1,9 @@
 use crate::{
     config::mongo::MongoDB,
-    schema::project_schema::{CreateOwner, CreateProject, FetchOwner, FetchProject, Owner, Project},
+    schema::project_schema::{Employee, CreateEmployee, FetchEmployee, DeleteEmployee, UpdateEmployee,
+                             Store, CreateStore, FetchStore,
+                             Location, CreateLocation, FetchLocation,
+                             Rank, CreateRank, FetchRank},
 };
 use async_graphql::{Context, EmptySubscription, FieldResult, Object, Schema};
 
@@ -9,56 +12,128 @@ pub struct Mutation;
 
 #[Object(extends)]
 impl Query {
-    async fn owner(&self, context: &Context<'_>, input: FetchOwner) -> FieldResult<Owner> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let owner = db.get_single_owner(&input._id).unwrap();
-        Ok(owner)
+    /*
+     * Employee Queries
+     */
+    async fn get_employee(&self, context: &Context<'_>, input: FetchEmployee) -> FieldResult<Employee> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let found_employee: Employee = db.get_single_employee(&input.id).unwrap();
+        Ok(found_employee)
     }
 
-    async fn get_owners(&self, context: &Context<'_>) -> FieldResult<Vec<Owner>> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let owner_vec = db.get_owners().unwrap();
-        Ok(owner_vec)
+    async fn get_all_employees(&self, context: &Context<'_>) -> FieldResult<Vec<Employee>> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let employee_vec: Vec<Employee> = db.get_all_employees().unwrap();
+
+        Ok(employee_vec)
     }
 
-    async fn project(&self, context: &Context<'_>, input: FetchProject) -> FieldResult<Project> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let project = db.get_single_project(&input._id).unwrap();
-        Ok(project)
+    /*
+     * Store Queries
+     */
+    async fn get_store(&self, context: &Context<'_>, input: FetchStore) -> FieldResult<Store> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let found_store: Store = db.get_single_store(&input.id).unwrap().unwrap();
+
+        Ok(found_store)
     }
 
-    async fn get_projects(&self, context: &Context<'_>) -> FieldResult<Vec<Project>> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let project_vec = db.get_projects().unwrap();
-        Ok(project_vec)
+    async fn get_all_stores(&self, context: &Context<'_>) -> FieldResult<Vec<Store>> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let store_vec: Vec<Store> = db.get_all_stores().unwrap();
+
+        Ok(store_vec)
+    }
+
+    /*
+     * Location Queries
+     */
+    async fn get_location(&self, context: &Context<'_>, input: FetchLocation) -> FieldResult<Location> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let found_location: Location = db.get_single_location(&input.id).unwrap().unwrap();
+
+        Ok(found_location)
+    }
+
+    async fn get_all_locations(&self, context: &Context<'_>) -> FieldResult<Vec<Location>> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let location_vec: Vec<Location> = db.get_all_locations().unwrap();
+
+        Ok(location_vec)
+    }
+
+    /*
+     * Rank Queries
+     */
+    async fn get_rank(&self, context: &Context<'_>, input: FetchRank) -> FieldResult<Rank> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let found_rank: Rank = db.get_single_rank(&input.id).unwrap().unwrap();
+
+        Ok(found_rank)
+    }
+
+    async fn get_all_ranks(&self, context: &Context<'_>) -> FieldResult<Vec<Rank>> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let rank_vec: Vec<Rank> = db.get_all_ranks().unwrap();
+
+        Ok(rank_vec)
     }
 }
 
 #[Object]
 impl Mutation {
-    async fn create_owner(&self, context: &Context<'_>, input: CreateOwner) -> FieldResult<Owner> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let new_owner = Owner {
-            _id: None,
-            email: input.email,
-            name: input.name,
-            phone: input.phone,
-        };
-        let owner = db.create_owner(new_owner).unwrap();
-        Ok(owner)
+    /*
+     * Employee Mutations
+     */
+    async fn create_employee(&self, context: &Context<'_>, input: CreateEmployee) -> FieldResult<Employee> {
+        let db: &&MongoDB  = &context.data_unchecked::<MongoDB>();
+        let created_employee = db.create_employee(input).unwrap();
+
+        Ok(created_employee)
     }
 
-    async fn create_project(&self, context: &Context<'_>, input: CreateProject) -> FieldResult<Project> {
-        let db = &context.data_unchecked::<MongoDB>();
-        let new_project = Project {
-            _id: None,
-            owner_id: input.owner_id,
-            name: input.name,
-            description: input.description,
-            status: input.status,
-        };
-        let project = db.create_project(new_project).unwrap();
-        Ok(project)
+    async fn update_employee(&self, context: &Context<'_>, input: UpdateEmployee) -> FieldResult<Employee> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let updated_employee = db.update_employee(input).unwrap();
+
+        Ok(updated_employee)
+    }
+
+    async fn delete_employee(&self, context: &Context<'_>, input: DeleteEmployee) -> FieldResult<Employee> {
+        let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
+        let deleted_employee = db.delete_employee(input).unwrap();
+
+        Ok(deleted_employee)
+    }
+
+    /*
+     * Store Mutations
+     */
+    async fn create_store(&self, context: &Context<'_>, input: CreateStore) -> FieldResult<Store> {
+        let db: &&MongoDB  = &context.data_unchecked::<MongoDB>();
+        let created_store: Store = db.create_store(input).unwrap();
+
+        Ok(created_store)
+    }
+
+    /*
+     * Location Mutations
+     */
+    async fn create_location(&self, context: &Context<'_>, input: CreateLocation) -> FieldResult<Location> {
+        let db: &&MongoDB  = &context.data_unchecked::<MongoDB>();
+        let created_location: Location = db.create_location(input).unwrap();
+
+        Ok(created_location)
+    }
+
+    /*
+     * Rank Mutations
+     */
+    async fn create_rank(&self, context: &Context<'_>, input: CreateRank) -> FieldResult<Rank> {
+        let db: &&MongoDB  = &context.data_unchecked::<MongoDB>();
+        let created_rank: Rank = db.create_rank(input).unwrap();
+
+        Ok(created_rank)
     }
 }
 
