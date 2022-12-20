@@ -15,7 +15,7 @@ impl MongoDB {
         dotenv().ok();
         let uri = match env::var("MONGO_URI"){
             Ok(v) => v.to_string(),
-            Err(_) => format!("Error while loading env variable!"),
+            Err(_) => format!("Error while loading environment file!"),
         };
 
         let client = Client::with_uri_str(uri).unwrap();
@@ -53,14 +53,22 @@ impl MongoDB {
             .expect(&*format!("Error while fetching requested Employee with ID '{}'", obj_id))
             .unwrap();
 
+        let validated_rank = if update_entry.rank_id == None {employee_result.rank_id.unwrap()} else {
+            let opt_rank = self.get_single_rank(&update_entry.rank_id.unwrap()).unwrap();
+            if opt_rank.is_some() {
+                opt_rank.unwrap().id.unwrap().to_string()
+            }else {
+                employee_result.rank_id.unwrap().clone()
+            }
+        };
+
         let first_name: String = if update_entry.first_name == None {employee_result.first_name} else { update_entry.first_name.clone().unwrap() };
         let last_name: String= if update_entry.last_name == None {employee_result.last_name} else { update_entry.last_name.clone().unwrap() };
-        let status: Status = if update_entry.status == None {Status::None} else { update_entry.status.clone().unwrap() };
-        let validated_rank: String = self.validate_rank(&update_entry.rank_id);
-        let validated_stores: Vec<String> = self.validate_store_vec(&update_entry.stores.unwrap());
+        let status: String = if update_entry.status == None {Status::None.to_string()} else { update_entry.status.unwrap().to_string() };
+        let validated_stores: Vec<String> = if update_entry.stores == None {vec![]} else { self.validate_store_vec(&update_entry.stores.unwrap()) };
 
         let update_filter: Document  = doc! {"_id": obj_id};
-        let update: Document  = doc! {"$set": {"first_name": String::from(&first_name), "last_name": String::from(&last_name), "stores": &validated_stores, "rank": &validated_rank}};
+        let update: Document  = doc! {"$set": {"first_name": String::from(&first_name), "last_name": String::from(&last_name), "stores": &validated_stores, "rank_id": &validated_rank, "status": status}};
 
         col.update_one(update_filter, update,None).ok().expect(&*format!("Error while updating requested Employee with ID '{}", obj_id));
 
@@ -72,6 +80,7 @@ impl MongoDB {
     pub fn create_employee(&self, new_entry: CreateEmployee) -> Result<Employee, Error> {
         let col: Collection<Employee> = MongoDB::column_helper::<Employee>(&self, "employee");
         let validated_stores: Vec<String> = self.validate_store_vec(&new_entry.stores.unwrap());
+        let validated_rank: String =  self.validate_rank(&new_entry.rank_id);
 
         let mut new_doc = Employee{
             id: None,
@@ -79,7 +88,7 @@ impl MongoDB {
             last_name: new_entry.last_name.clone(),
             status: Option::from(if new_entry.status == None { Status::None } else { new_entry.status.unwrap() }),
             stores: Option::from(validated_stores),
-            rank_id: None,
+            rank_id: Option::from(validated_rank),
         };
 
         let data: InsertOneResult = col.insert_one(&new_doc, None)
@@ -121,10 +130,12 @@ impl MongoDB {
      */
     pub fn create_store(&self, new_entry: CreateStore) -> Result<Store, Error> {
         let col: Collection<Store> = MongoDB::column_helper::<Store>(&self, "store");
+        let validated_location = self.validate_location(&new_entry.location_id);
+
         let mut new_doc = Store{
             id: None,
             name: new_entry.name.clone(),
-            location_id: self.validate_location(&new_entry.location_id)
+            location_id: String::from("")
         };
 
         let data: InsertOneResult = col.insert_one(&new_doc, None)
@@ -224,13 +235,14 @@ impl MongoDB {
         Ok(opt_location)
     }
 
-    pub fn validate_location(&self, location_id: &String) -> String {
+    pub fn validate_location(&self, location_id: &String) -> Option<Location> {
         let mut valid_location_id: String = location_id.clone();
 
         let fetched_location: Option<Location> = self.get_single_location(location_id).unwrap();
-        if fetched_location.is_none() { valid_location_id = String::from("")}
+        //if fetched_location.is_none() { valid_location_id = String::from("")}
 
-        valid_location_id
+        fetched_location
+        //valid_location_id
     }
 
     /*
@@ -240,8 +252,8 @@ impl MongoDB {
         let col: Collection<Rank> = MongoDB::column_helper::<Rank>(&self, "rank");
         let mut new_doc = Rank{
             id: None,
-            name: new_entry.name.clone(),
-            description: new_entry.description.clone()
+            name: new_entry.name,
+            description: new_entry.description
         };
 
         let data: InsertOneResult = col.insert_one(&new_doc, None)

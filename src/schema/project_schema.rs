@@ -1,3 +1,4 @@
+use std::fmt;
 use async_graphql::{Enum, InputObject, SimpleObject};
 use mongodb::bson::{
     oid::ObjectId
@@ -41,7 +42,7 @@ pub struct UpdateEmployee {
     pub last_name: Option<String>,
     pub status: Option<Status>,
     pub stores: Option<Vec<String>>,
-    pub rank_id: String
+    pub rank_id: Option<String>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Enum)]
@@ -51,6 +52,18 @@ pub enum Status {
     EmergencyService,
     Vacation,
     Illness,
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Status::None => write!(f, "None"),
+            Status::Working => write!(f, "Working"),
+            Status::EmergencyService => write!(f, "EmergencyService"),
+            Status::Vacation => write!(f, "Vacation"),
+            Status::Illness => write!(f, "Illness"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
@@ -97,16 +110,21 @@ pub struct Rank {
     #[serde(rename="_id", skip_serializing_if="Option::is_none")]
     pub id: Option<ObjectId>,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
 }
 
 #[derive(InputObject)]
 pub struct CreateRank {
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
 }
 
 #[derive(InputObject)]
 pub struct FetchRank {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct Error {
+    pub message: String,
 }

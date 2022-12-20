@@ -18,6 +18,7 @@ impl Query {
     async fn get_employee(&self, context: &Context<'_>, input: FetchEmployee) -> FieldResult<Employee> {
         let db: &&MongoDB = &context.data_unchecked::<MongoDB>();
         let found_employee: Employee = db.get_single_employee(&input.id).unwrap();
+
         Ok(found_employee)
     }
 

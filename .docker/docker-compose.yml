@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+
+  mongo:
+    image: mongo
+    container_name: hsbo_mongodb
+    restart: unless-stopped
+    volumes:
+      - ./data:/data/db
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: passwort123
+      MONGO_INITDB_DATABASE: rust_praktikum
